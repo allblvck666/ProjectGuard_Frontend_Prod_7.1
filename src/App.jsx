@@ -288,6 +288,21 @@ const initialRoute = (() => {
 // ✔️ ДОЛЖНО БЫТЬ ЗДЕСЬ — СРАЗУ ПОСЛЕ initialRoute
 const [route, setRoute] = useState(initialRoute);
 
+// ================================
+// 🔥 Авто-переход в админку (Telegram WebApp FIX)
+// ================================
+useEffect(() => {
+  const isTG = window.Telegram?.WebApp != null;
+  const role = localStorage.getItem("role");
+  const saved = localStorage.getItem("route");
+
+  if (isTG && role === "superadmin" && saved !== "admin") {
+    console.log("🔐 Telegram WebApp → переключаем в admin");
+    setRoute("admin");
+    localStorage.setItem("route", "admin");
+  }
+}, []);
+
 const goAdmin = () => {
   setRoute("admin");
   localStorage.setItem("route", "admin");
