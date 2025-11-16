@@ -1,11 +1,5 @@
 import axios from "axios";
 
-const token = localStorage.getItem("jwt_token");
-if (token) {
-  axios.defaults.headers.common["token"] = token;
-} else {
-  delete axios.defaults.headers.common["token"];
-}
 
 import AdminPage from "./AdminPage.jsx";
 console.log("📦 App.jsx загружает AdminPage из", import.meta.url);
@@ -191,6 +185,17 @@ function Modal({ title, children, onClose, onOk, okText = "OK", disabled }) {
 
 /* === Основное приложение === */
 function App() {
+  // 🔗 Синхронизация axios с токеном при старте
+  useEffect(() => {
+    const token = localStorage.getItem("jwt_token");
+    if (token) {
+      axios.defaults.headers.common["token"] = token;
+    } else {
+      delete axios.defaults.headers.common["token"];
+    }
+  }, []);
+
+  
   // ========================
 // 🔐 Telegram Auto-Login
 // ========================
@@ -219,6 +224,8 @@ useEffect(() => {
         if (data.ok) {
           localStorage.setItem("jwt_token", data.token);
           localStorage.setItem("role", data.role);
+          // 💉 сразу пробрасываем токен в axios
+          axios.defaults.headers.common["token"] = data.token;
           window.location.reload();
         }
       });
@@ -226,6 +233,7 @@ useEffect(() => {
     console.log("Telegram auto-login skipped", err);
   }
 }, []);
+
 
 // ===== ВРЕМЕННЫЙ DEV-LOGIN =====
 const devLogin = async () => {
@@ -251,6 +259,7 @@ const devLogin = async () => {
     if (data.ok) {
       localStorage.setItem("jwt_token", data.token);
       localStorage.setItem("role", data.role);
+      axios.defaults.headers.common["token"] = data.token;
       alert("✅ Вход выполнен как " + data.role);
 
       // ===========================================
