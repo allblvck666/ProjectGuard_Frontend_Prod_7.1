@@ -185,6 +185,25 @@ function Modal({ title, children, onClose, onOk, okText = "OK", disabled }) {
 
 /* === Основное приложение === */
 function App() {
+  // =====================================
+  //   🔍 ДИАГНОСТИЧЕСКИЕ ЛОГИ
+  // =====================================
+  console.log("📌 ROLE =", localStorage.getItem("role"));
+  console.log("📌 ROUTE =", localStorage.getItem("route"));
+  console.log("📌 TOKEN =", localStorage.getItem("jwt_token"));
+  console.log("📌 IS_TG =", window.Telegram?.WebApp != null);
+
+  // =====================================
+  // 🔥 ЖЁСТКИЙ ФИКС БЕСКОНЕЧНОГО РЕЛОАДА
+  // =====================================
+  if (
+    localStorage.getItem("route") === "admin" &&
+    !["admin", "superadmin"].includes(localStorage.getItem("role"))
+  ) {
+    console.log("🛑 Fix: удаляю route=admin для не-админа");
+    localStorage.setItem("route", "main");
+  }
+
   // 🔗 Синхронизация axios с токеном при старте
   useEffect(() => {
     const token = localStorage.getItem("jwt_token");
