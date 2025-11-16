@@ -191,7 +191,7 @@ function App() {
     if (token) {
       axios.defaults.headers.common["token"] = token;
     } else {
-      delete axios.defaults.headers.common["token"];
+      
     }
   }, []);
 
@@ -225,7 +225,7 @@ useEffect(() => {
         localStorage.setItem("role", data.role);
 
         // axios токен
-        axios.defaults.headers.common["Authorization"] = `Bearer ${data.token}`;
+        axios.defaults.headers.common["token"] = data.token;
 
         // Меняем маршрут вместо reload()
         if (data.role === "admin" || data.role === "superadmin") {
