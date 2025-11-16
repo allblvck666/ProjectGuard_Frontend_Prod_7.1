@@ -28,7 +28,9 @@ useEffect(() => {
     axios
       .post(`${API}/api/auth/telegram`, user)
       .then(() => console.log("✅ Telegram user synced:", user))
-      .catch((err) => console.error("❌ Ошибка синхронизации Telegram:", err));
+      .catch((err) =>
+        console.error("❌ Ошибка синхронизации Telegram:", err)
+      );
   }
 }, []);
 

@@ -1,15 +1,40 @@
-// frontend/src/TelegramLoginButton.jsx
-
 export default function TelegramLoginButton() {
-  const startTelegramLogin = () => {
-    // НОРМАЛЬНЫЙ путь на backend: чистый callback
-    window.location.href =
-      "https://projectguard-prod-7-1.onrender.com/api/auth/telegram-login";
+
+  const handleLogin = () => {
+    window.Telegram.Login.auth(
+      {
+        bot_id: "твой_бот_ID",
+        request_access: true,
+      },
+      async (user) => {
+        try {
+          const res = await fetch(
+            "https://projectguard-prod-7-1.onrender.com/api/auth/telegram",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(user),
+            }
+          );
+
+          const data = await res.json();
+          if (data.ok && data.token) {
+            localStorage.setItem("jwt_token", data.token);
+            window.location.reload();
+          } else {
+            alert("Ошибка авторизации");
+          }
+        } catch (e) {
+          console.error(e);
+          alert("Ошибка запроса");
+        }
+      }
+    );
   };
 
   return (
     <button
-      onClick={startTelegramLogin}
+      onClick={handleLogin}
       style={{
         background: "#4d6eeb",
         color: "white",
