@@ -279,16 +279,14 @@ const devLogin = async () => {
 const initialRoute = (() => {
   const isTG = window.Telegram?.WebApp != null;
 
-  // 💾 Сохраняем route между обновлениями
   const saved = localStorage.getItem("route");
+  if (isTG) return saved || "main";
 
-  if (isTG) {
-    return saved || "main"; // 🟩 больше НИКОГДА не "#/"
-  }
-
-  // браузерный режим
   return (window.location.hash || "#/").replace("#/", "");
 })();
+
+// ✔️ ДОЛЖНО БЫТЬ ЗДЕСЬ — СРАЗУ ПОСЛЕ initialRoute
+const [route, setRoute] = useState(initialRoute);
 
 const goAdmin = () => {
   setRoute("admin");
@@ -299,6 +297,7 @@ const goMain = () => {
   setRoute("main");
   localStorage.setItem("route", "main");
 };
+
 
 
   // ===== Основное состояние приложения =====
