@@ -278,30 +278,52 @@ const devLogin = async () => {
 // ===== Router Fix for Telegram WebApp =====
 const initialRoute = (() => {
   const isTG = window.Telegram?.WebApp != null;
-
+  const role = localStorage.getItem("role");
   const saved = localStorage.getItem("route");
-  if (isTG) return saved || "main";
 
+  if (isTG) {
+    // ❌ если не админ – НИКОГДА не открываем админку по сохранённому route
+    if (role !== "admin" && role !== "superadmin") {
+      return "main";
+    }
+    // ✅ админ / супер-админ → по умолчанию идём в admin
+    return saved || "admin";
+  }
+
+  // браузерный режим
   return (window.location.hash || "#/").replace("#/", "");
 })();
 
-// ✔️ ДОЛЖНО БЫТЬ ЗДЕСЬ — СРАЗУ ПОСЛЕ initialRoute
 const [route, setRoute] = useState(initialRoute);
 
 // ================================
-// 🔥 Авто-переход в админку (Telegram WebApp FIX)
+// 🔥 Авто-переход / сброс route в Telegram WebApp
 // ================================
 useEffect(() => {
   const isTG = window.Telegram?.WebApp != null;
   const role = localStorage.getItem("role");
   const saved = localStorage.getItem("route");
 
-  if (isTG && role === "superadmin" && saved !== "admin") {
-    console.log("🔐 Telegram WebApp → переключаем в admin");
-    setRoute("admin");
-    localStorage.setItem("route", "admin");
+  if (!isTG) return;
+
+  // 🟢 Админ / супер-админ – всегда в админку
+  if (role === "admin" || role === "superadmin") {
+    if (saved !== "admin") {
+      console.log("🔐 Telegram WebApp → авто-переход в admin");
+      setRoute("admin");
+      localStorage.setItem("route", "admin");
+    }
+    return;
+  }
+
+  // 🔴 НЕ админ, но в localStorage лежит 'admin' → жёстко сбрасываем
+  if (saved === "admin") {
+    console.log("🙅 Нет прав — сбрасываем route на main");
+    setRoute("main");
+    localStorage.setItem("route", "main");
   }
 }, []);
+
 
 const goAdmin = () => {
   setRoute("admin");
