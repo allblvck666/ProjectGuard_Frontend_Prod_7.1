@@ -226,7 +226,13 @@ useEffect(() => {
           localStorage.setItem("role", data.role);
           // 💉 сразу пробрасываем токен в axios
           axios.defaults.headers.common["token"] = data.token;
-          window.location.reload();
+          if (data.role === "admin" || data.role === "superadmin") {
+            setRoute("admin");
+            localStorage.setItem("route", "admin");
+          } else {
+            setRoute("main");
+            localStorage.setItem("route", "main");
+          }
         }
       });
   } catch (err) {
@@ -268,8 +274,13 @@ const devLogin = async () => {
       // В браузере hash работает — но в Telegram WebApp НЕТ!
       // Там window.location.hash всегда пустой.
       // Поэтому вручную переключаем роут:
-      setRoute("admin");
-      localStorage.setItem("route", "admin"); // 👈 ДОБАВИТЬ ЭТО
+      if (data.role === "admin" || data.role === "superadmin") {
+        setRoute("admin");
+        localStorage.setItem("route", "admin");
+      } else {
+        setRoute("main");
+        localStorage.setItem("route", "main");
+      }      
       // ===========================================
 
       // Для браузера пусть остаётся reload
@@ -304,6 +315,28 @@ const initialRoute = (() => {
 })();
 
 const [route, setRoute] = useState(initialRoute);
+
+// ===========================
+//   ROLE ACCESS CONTROL
+// ===========================
+const role = localStorage.getItem("role");
+
+// если нет токена → только LoginPage
+if (!localStorage.getItem("jwt_token") && route !== "login") {
+  setRoute("login");
+}
+
+// обычный менеджер НЕ может видеть админку
+useEffect(() => {
+  const role = localStorage.getItem("role");
+
+  // если роль НЕ admin и НЕ superadmin → перекидываем в main
+  if (route === "admin" && role !== "admin" && role !== "superadmin") {
+    console.log("⛔ Доступ в админку запрещён — роль:", role);
+    setRoute("main");
+    localStorage.setItem("route", "main");
+  }
+}, [route]);
 
 // ================================
 // 🔥 Авто-переход / сброс route в Telegram WebApp
