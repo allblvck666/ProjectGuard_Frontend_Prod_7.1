@@ -7,8 +7,6 @@ if (token) {
   delete axios.defaults.headers.common["token"];
 }
 
-
-
 import AdminPage from "./AdminPage.jsx";
 console.log("📦 App.jsx загружает AdminPage из", import.meta.url);
 import { useEffect, useState } from "react";
@@ -193,7 +191,43 @@ function Modal({ title, children, onClose, onOk, okText = "OK", disabled }) {
 
 /* === Основное приложение === */
 function App() {
-  // ===== ВРЕМЕННЫЙ DEV-LOGIN =====
+  // ========================
+// 🔐 Telegram Auto-Login
+// ========================
+useEffect(() => {
+  try {
+    const tg = window.Telegram?.WebApp;
+
+    // НЕ мини-апп → пропускаем
+    if (!tg?.initDataUnsafe?.user) return;
+
+    const user = tg.initDataUnsafe.user;
+
+    // Отправляем user.id на backend → он вернёт роль и токен
+    fetch(`${import.meta.env.VITE_API_URL}/api/auth/telegram-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json",
+        "Authorization": `Bearer ${localStorage.getItem("jwt_token")}` },
+      body: JSON.stringify({
+        tg_id: user.id,
+        username: user.username || "",
+        first_name: user.first_name || "",
+      }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.ok) {
+          localStorage.setItem("jwt_token", data.token);
+          localStorage.setItem("role", data.role);
+          window.location.reload();
+        }
+      });
+  } catch (err) {
+    console.log("Telegram auto-login skipped", err);
+  }
+}, []);
+
+// ===== ВРЕМЕННЫЙ DEV-LOGIN =====
 const devLogin = async () => {
   const payload = {
     tg_id: 426188469,
@@ -203,18 +237,34 @@ const devLogin = async () => {
   };
 
   try {
-    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/auth/dev-login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+    const res = await fetch(
+      `${import.meta.env.VITE_API_URL}/api/auth/dev-login`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json",
+        "Authorization": `Bearer ${localStorage.getItem("jwt_token")}` },
+        body: JSON.stringify(payload),
+      }
+    );
     const data = await res.json();
 
     if (data.ok) {
       localStorage.setItem("jwt_token", data.token);
       localStorage.setItem("role", data.role);
       alert("✅ Вход выполнен как " + data.role);
-      window.location.reload();
+
+      // ===========================================
+      // ✔️ КРИТИЧЕСКИЙ ФИКС ДЛЯ TELEGRAM WEBAPP
+      // ===========================================
+      // В браузере hash работает — но в Telegram WebApp НЕТ!
+      // Там window.location.hash всегда пустой.
+      // Поэтому вручную переключаем роут:
+      setRoute("admin");
+      localStorage.setItem("route", "admin"); // 👈 ДОБАВИТЬ ЭТО
+      // ===========================================
+
+      // Для браузера пусть остаётся reload
+      
     } else {
       alert("❌ Ошибка входа");
     }
@@ -224,10 +274,32 @@ const devLogin = async () => {
   }
 };
 
-  // ===== Мини-роутер по состоянию =====
-  const [route, setRoute] = useState("main");
-  const goAdmin = () => setRoute("admin");
-  const goMain = () => setRoute("main");
+
+// ===== Router Fix for Telegram WebApp =====
+const initialRoute = (() => {
+  const isTG = window.Telegram?.WebApp != null;
+
+  // 💾 Сохраняем route между обновлениями
+  const saved = localStorage.getItem("route");
+
+  if (isTG) {
+    return saved || "main"; // 🟩 больше НИКОГДА не "#/"
+  }
+
+  // браузерный режим
+  return (window.location.hash || "#/").replace("#/", "");
+})();
+
+const goAdmin = () => {
+  setRoute("admin");
+  localStorage.setItem("route", "admin");
+};
+
+const goMain = () => {
+  setRoute("main");
+  localStorage.setItem("route", "main");
+};
+
 
   // ===== Основное состояние приложения =====
   const [stats, setStats] = useState([]);
@@ -258,77 +330,88 @@ const devLogin = async () => {
   const [viewTab, setViewTab] = useState("active"); // 'active' | 'archive'
   const [archiveFilter, setArchiveFilter] = useState("all"); // 'all' | 'success' | 'closed' | 'deleted'
 
-  const [closeModal, setCloseModal] = useState({ open: false, id: null, reason: "" });
-  const [successModal, setSuccessModal] = useState({ open: false, id: null, doc: "" });
-  const [deleteModal, setDeleteModal] = useState({ open: false, id: null, reason: "" });
+  const [closeModal, setCloseModal] = useState({
+    open: false,
+    id: null,
+    reason: "",
+  });
+  const [successModal, setSuccessModal] = useState({
+    open: false,
+    id: null,
+    doc: "",
+  });
+  const [deleteModal, setDeleteModal] = useState({
+    open: false,
+    id: null,
+    reason: "",
+  });
+
   // === Редактирование защиты ===
-const [editModal, setEditModal] = useState({ open: false, id: null });
-const [editSelectedSkus, setEditSelectedSkus] = useState([]);
-const [editPerSkuMode, setEditPerSkuMode] = useState(true);
-const [editAreaUnified, setEditAreaUnified] = useState("");
-const [editComment, setEditComment] = useState("");
+  const [editModal, setEditModal] = useState({ open: false, id: null });
+  const [editSelectedSkus, setEditSelectedSkus] = useState([]);
+  const [editPerSkuMode, setEditPerSkuMode] = useState(true);
+  const [editAreaUnified, setEditAreaUnified] = useState("");
+  const [editComment, setEditComment] = useState("");
 
-const openEditModal = (item) => {
-  setEditModal({ open: true, id: item.id });
-  const parsed = [];
-  const parts = (item.sku || "").split(";").map((p) => p.trim());
-  for (const p of parts) {
-    const m = p.match(/([\w-]+) \(([^)]+)\).*?(\d+(?:\.\d+)?) м²/);
-    if (m) parsed.push({ sku: m[1], type: m[2], area: m[3] });
-  }
-  setEditSelectedSkus(parsed);
-  setEditComment(item.comment || "");
-  // Определяем режим по данным — если у артикулов нет индивидуальных площадей
-if (parsed.every((s) => !s.area || Number(s.area) === 0)) {
-  setEditPerSkuMode(false);
-  setEditAreaUnified(item.area_m2 || "");
-} else {
-  setEditPerSkuMode(true);
-  setEditAreaUnified("");
-}
-};
-
-const submitEdit = async () => {
-  let total = 0;
-  let skuData = [];
-
-  if (editPerSkuMode) {
-    skuData = editSelectedSkus.map((s) => ({
-      sku: s.sku,
-      type: s.type,
-      area: Number(s.area || 0),
-    }));
-    total = skuData.reduce((sum, s) => sum + s.area, 0);
-  } else {
-    // режим "Единый" — не передаём area внутри артикула
-    const unified = Number(editAreaUnified || 0);
-    skuData = editSelectedSkus.map((s) => ({
-      sku: s.sku,
-      type: s.type,
-    }));
-    total = unified;
-  }
-  
-
-  if (total < 50) {
-    return alert("❌ Минимум 50 м²");
-  }
-
-  const payload = {
-    sku_data: skuData,
-    area_m2: total,
-    comment: editComment,
+  const openEditModal = (item) => {
+    setEditModal({ open: true, id: item.id });
+    const parsed = [];
+    const parts = (item.sku || "").split(";").map((p) => p.trim());
+    for (const p of parts) {
+      const m = p.match(/([\w-]+) \(([^)]+)\).*?(\d+(?:\.\d+)?) м²/);
+      if (m) parsed.push({ sku: m[1], type: m[2], area: m[3] });
+    }
+    setEditSelectedSkus(parsed);
+    setEditComment(item.comment || "");
+    // Определяем режим по данным — если у артикулов нет индивидуальных площадей
+    if (parsed.every((s) => !s.area || Number(s.area) === 0)) {
+      setEditPerSkuMode(false);
+      setEditAreaUnified(item.area_m2 || "");
+    } else {
+      setEditPerSkuMode(true);
+      setEditAreaUnified("");
+    }
   };
 
-  try {
-    await axios.put(`${API}/api/protections/${editModal.id}`, payload);
-    setEditModal({ open: false, id: null });
-    await load();
-  } catch (err) {
-    alert("Ошибка при редактировании защиты");
-  }
-};
+  const submitEdit = async () => {
+    let total = 0;
+    let skuData = [];
 
+    if (editPerSkuMode) {
+      skuData = editSelectedSkus.map((s) => ({
+        sku: s.sku,
+        type: s.type,
+        area: Number(s.area || 0),
+      }));
+      total = skuData.reduce((sum, s) => sum + s.area, 0);
+    } else {
+      // режим "Единый" — не передаём area внутри артикула
+      const unified = Number(editAreaUnified || 0);
+      skuData = editSelectedSkus.map((s) => ({
+        sku: s.sku,
+        type: s.type,
+      }));
+      total = unified;
+    }
+
+    if (total < 50) {
+      return alert("❌ Минимум 50 м²");
+    }
+
+    const payload = {
+      sku_data: skuData,
+      area_m2: total,
+      comment: editComment,
+    };
+
+    try {
+      await axios.put(`${API}/api/protections/${editModal.id}`, payload);
+      setEditModal({ open: false, id: null });
+      await load();
+    } catch (err) {
+      alert("Ошибка при редактировании защиты");
+    }
+  };
 
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState([]);
@@ -364,24 +447,22 @@ const submitEdit = async () => {
 
   useEffect(() => {
     load();
-  
+
     axios.get(`${API}/api/skus`).then((r) => {
       console.log("📦 skus raw:", r.data);
       const dataRaw = Array.isArray(r.data) ? r.data : r.data?.skus || [];
-    
+
       // ⚙️ Нормализация артикулов под фронт
       const normalized = dataRaw.map((x) => ({
         sku: x.sku || x.article || x.art || x.name || "",
         type: x.type || x.category || x.kind || x.group || "",
         collection: x.collection || x.series || x.line || "",
       }));
-    
+
       console.log("✅ normalized skus:", normalized.slice(0, 5));
       setSkus(normalized);
     });
-    
-    
-  
+
     axios.get(`${API}/api/managers`).then((r) => {
       console.log("👥 managers raw:", r.data);
       const dataRaw = Array.isArray(r.data) ? r.data : r.data?.managers || [];
@@ -392,13 +473,10 @@ const submitEdit = async () => {
       console.log("✅ normalized managers:", normalized);
       setManagers(normalized);
     });
-    
-    
-  
+
     if (showHistory) loadHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [managerFilter, statusFilter, search, showHistory, viewTab, archiveFilter]);
-   
 
   const onAreaChange = (skuObj, value) =>
     setSelectedSkus((prev) =>
@@ -420,8 +498,16 @@ const submitEdit = async () => {
   };
 
   const submit = async () => {
-    const required = ["partner", "partner_city", "client", "last4", "object_city"];
-    const emptyFields = required.filter((f) => !String(form[f] || "").trim());
+    const required = [
+      "partner",
+      "partner_city",
+      "client",
+      "last4",
+      "object_city",
+    ];
+    const emptyFields = required.filter(
+      (f) => !String(form[f] || "").trim()
+    );
     const invalidLast4 = form.last4 && !/^\d{4}$/.test(form.last4);
 
     if (invalidLast4) emptyFields.push("last4");
@@ -444,7 +530,7 @@ const submitEdit = async () => {
     }));
 
     const total_area = perSkuMode
-      ? sku_data.reduce((sum, it) => sum + (Number(it.area || 0)), 0)
+      ? sku_data.reduce((sum, it) => sum + Number(it.area || 0), 0)
       : Number(form.area_m2 || 0);
 
     if (total_area <= 0) return alert("Укажите метраж");
@@ -473,16 +559,17 @@ const submitEdit = async () => {
       await load();
     } catch (err) {
       const detail = err.response?.data?.detail;
-    
+
       if (typeof detail === "string") {
         alert("⚠️ " + detail);
       } else if (detail?.msg) {
         // ⚠️ Дубликат — показываем предупреждение и даём шанс отправить админу
         const conflictMsg = detail.msg;
         const reason = prompt(
-          conflictMsg + "\n\n💬 Введите комментарий, если хотите отправить защиту админу:"
+          conflictMsg +
+            "\n\n💬 Введите комментарий, если хотите отправить защиту админу:"
         );
-    
+
         if (reason && reason.trim()) {
           try {
             await axios.post(`${API}/api/protections/pending`, {
@@ -498,7 +585,6 @@ const submitEdit = async () => {
         } else {
           alert("⚠️ Защита не создана (отменено пользователем).");
         }
-    
       } else if (err.response?.status === 400) {
         const msg = detail || "Ошибка данных защиты";
         alert("⚠️ " + msg);
@@ -514,14 +600,15 @@ const submitEdit = async () => {
           String(msg).toLowerCase().includes(f.toLowerCase())
         );
         if (matched.length > 0) setErrorFields(matched);
-    
-      } else if (err.response?.status === 409 && err.response?.data?.detail?.msg) {
+      } else if (
+        err.response?.status === 409 &&
+        err.response?.data?.detail?.msg
+      ) {
         alert(err.response.data.detail.msg);
-    
       } else {
         alert("❌ Ошибка: не удалось создать защиту");
       }
-    }    
+    }
   };
 
   const extendAction = async (id, days = 10) => {
@@ -530,13 +617,13 @@ const submitEdit = async () => {
       await load();
     } catch (err) {
       const det = err.response?.data?.detail;
-  
+
       if (err.response?.status === 403 && (det?.needs_admin || det?.msg)) {
         const reason = prompt(
           (det?.msg || "Лимит продлений.") +
             "\nВведите причину продления (например: клиент ждёт оплату, перенос поставки и т.п.):"
         );
-  
+
         if (reason && reason.trim()) {
           await axios.post(`${API}/api/protections/${id}/request-extend`, {
             days,
@@ -551,11 +638,13 @@ const submitEdit = async () => {
       }
     }
   };
-  
 
-  const openCloseModal = (id) => setCloseModal({ open: true, id, reason: "" });
-  const openSuccessModal = (id) => setSuccessModal({ open: true, id, doc: "" });
-  const openDeleteModal = (id) => setDeleteModal({ open: true, id, reason: "" });
+  const openCloseModal = (id) =>
+    setCloseModal({ open: true, id, reason: "" });
+  const openSuccessModal = (id) =>
+    setSuccessModal({ open: true, id, doc: "" });
+  const openDeleteModal = (id) =>
+    setDeleteModal({ open: true, id, reason: "" });
 
   const doClose = async () => {
     try {
@@ -577,7 +666,9 @@ const submitEdit = async () => {
       setSuccessModal({ open: false, id: null, doc: "" });
       await load();
     } catch (e) {
-      alert(e.response?.data?.detail || "Не удалось отметить как успешную");
+      alert(
+        e.response?.data?.detail || "Не удалось отметить как успешную"
+      );
     }
   };
 
@@ -603,9 +694,9 @@ const submitEdit = async () => {
   const exportXlsx = () => {
     const url = `${API}/api/export?search=${encodeURIComponent(
       search
-    )}&manager=${encodeURIComponent(managerFilter)}&status=${encodeURIComponent(
-      statusFilter
-    )}`;
+    )}&manager=${encodeURIComponent(
+      managerFilter
+    )}&status=${encodeURIComponent(statusFilter)}`;
     window.open(url, "_blank");
   };
 
@@ -617,243 +708,280 @@ const submitEdit = async () => {
     return <AdminPage onBack={goMain} />;
   }
   if (route === "login") return <LoginPage />;
+
   return (
     <div className="container">
       <div className="header sticky" style={{ gap: 8, alignItems: "center" }}>
-      <h1 style={{
-  marginRight: "auto",
-  color: "#4d6eeb",
-  fontWeight: 700,
-  letterSpacing: "0.5px"
-}}>
-  🔰 Aquafloor защиты
-</h1>
-
-<button className="btn" onClick={goAdmin}>
-  👑 Админка
-</button>
-<button
-  onClick={devLogin}
-  style={{
-    background: "#3ddc97",
-    color: "white",
-    border: "none",
-    borderRadius: 8,
-    padding: "8px 12px",
-    marginLeft: 8,
-    fontWeight: 600,
-    cursor: "pointer"
-  }}
->
-  🚪 DEV LOGIN
-</button>
-
-<button className="btn refresh" onClick={load}>
-  🔄 Обновить
-</button>
-<button
-  className="btn secondary"
-  onClick={() => setShowHistory((v) => !v)}
-  title="История действий"
->
-  🧾 История
-</button>
-</div>
-
-{showHistory && (
-  <div className="card" style={{ marginBottom: 12 }}>
-    <div className="small" style={{ marginBottom: 8 }}>
-      Последние события (до 500):
-    </div>
-    <div style={{ maxHeight: 260, overflowY: "auto" }}>
-      {history.length === 0 && <div className="small">Пусто…</div>}
-      {history.map((h) => (
-        <div
-          key={h.id}
-          className="small"
-          style={{ padding: "6px 0", borderBottom: "1px solid var(--border)" }}
+        <h1
+          style={{
+            marginRight: "auto",
+            color: "#4d6eeb",
+            fontWeight: 700,
+            letterSpacing: "0.5px",
+          }}
         >
-          <b>#{h.protection_id}</b> • {h.actor} → {h.action} •{" "}
-          {new Date(h.at).toLocaleString()} •{" "}
-          <span style={{ opacity: 0.9 }}>{JSON.stringify(h.payload)}</span>
+          🔰 Aquafloor защиты
+        </h1>
+
+        <button className="btn" onClick={goAdmin}>
+          👑 Админка !! TEST !!
+        </button>
+        <button
+          onClick={devLogin}
+          style={{
+            background: "#3ddc97",
+            color: "white",
+            border: "none",
+            borderRadius: 8,
+            padding: "8px 12px",
+            marginLeft: 8,
+            fontWeight: 600,
+            cursor: "pointer",
+          }}
+        >
+          🚪 DEV LOGIN
+        </button>
+
+        <button className="btn refresh" onClick={load}>
+          🔄 Обновить
+        </button>
+        <button
+          className="btn secondary"
+          onClick={() => setShowHistory((v) => !v)}
+          title="История действий"
+        >
+          🧾 История
+        </button>
+      </div>
+
+      {showHistory && (
+        <div className="card" style={{ marginBottom: 12 }}>
+          <div className="small" style={{ marginBottom: 8 }}>
+            Последние события (до 500):
+          </div>
+          <div style={{ maxHeight: 260, overflowY: "auto" }}>
+            {history.length === 0 && (
+              <div className="small">Пусто…</div>
+            )}
+            {history.map((h) => (
+              <div
+                key={h.id}
+                className="small"
+                style={{
+                  padding: "6px 0",
+                  borderBottom: "1px solid var(--border)",
+                }}
+              >
+                <b>#{h.protection_id}</b> • {h.actor} → {h.action} •{" "}
+                {new Date(h.at).toLocaleString()} •{" "}
+                <span style={{ opacity: 0.9 }}>
+                  {JSON.stringify(h.payload)}
+                </span>
+              </div>
+            ))}
+          </div>
         </div>
-      ))}
-    </div>
-  </div>
-)}
+      )}
 
-<div className="card" style={{ marginTop: 8, marginBottom: 8 }}>
-  <div className="row" style={{ alignItems: "center", gap: 8 }}>
-    <div className="mode-toggle" style={{ marginRight: "auto" }}>
-      <div
-        className={`tag ${viewTab === "active" ? "active" : ""}`}
-        onClick={() => setViewTab("active")}
-      >
-        Активные
-      </div>
-      <div
-        className={`tag ${viewTab === "archive" ? "active" : ""}`}
-        onClick={() => setViewTab("archive")}
-      >
-        Архив защит
-      </div>
-    </div>
+      <div className="card" style={{ marginTop: 8, marginBottom: 8 }}>
+        <div className="row" style={{ alignItems: "center", gap: 8 }}>
+          <div className="mode-toggle" style={{ marginRight: "auto" }}>
+            <div
+              className={`tag ${
+                viewTab === "active" ? "active" : ""
+              }`}
+              onClick={() => setViewTab("active")}
+            >
+              Активные
+            </div>
+            <div
+              className={`tag ${
+                viewTab === "archive" ? "active" : ""
+              }`}
+              onClick={() => setViewTab("archive")}
+            >
+              Архив защит
+            </div>
+          </div>
 
-    {viewTab === "archive" && (
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <span className="small" style={{ opacity: 0.85 }}>
-          Показать:
-        </span>
+          {viewTab === "archive" && (
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <span className="small" style={{ opacity: 0.85 }}>
+                Показать:
+              </span>
+              <select
+                className="select"
+                value={archiveFilter}
+                onChange={(e) => setArchiveFilter(e.target.value)}
+              >
+                <option value="all">Все (кроме активных)</option>
+                <option value="success">Успешные</option>
+                <option value="closed">Закрытые</option>
+                <option value="deleted">Удалённые</option>
+              </select>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid">
+        {stats.map((s) => (
+          <StatCard key={s.manager} s={s} />
+        ))}
+      </div>
+
+      <div className="card">
+        <div className="row">
+          {/* 1️⃣ Выбор менеджера для новой защиты */}
+          <select
+            className="select"
+            value={form.manager}
+            onChange={(e) =>
+              setForm({ ...form, manager: e.target.value })
+            }
+          >
+            <option value="">Выберите менеджера…</option>
+            {Array.isArray(managers) &&
+              managers.map((m) => (
+                <option
+                  key={m.id}
+                  value={m.first_name || m.name || m.username}
+                >
+                  {m.first_name || m.name || m.username}
+                </option>
+              ))}
+          </select>
+
+          {/* 2️⃣ Фильтр по менеджерам */}
+          <select
+            className="select"
+            value={managerFilter}
+            onChange={(e) => setManagerFilter(e.target.value)}
+          >
+            <option value="">Все менеджеры</option>
+            {Array.isArray(managers) &&
+              managers.map((m) => (
+                <option key={m.id}>
+                  {m.first_name || m.name || m.username}
+                </option>
+              ))}
+          </select>
+
+          <input
+            className={errorClass("partner")}
+            placeholder="Партнёр (дилер)"
+            value={form.partner}
+            onChange={(e) =>
+              setForm({ ...form, partner: e.target.value })
+            }
+          />
+          <input
+            className={errorClass("partner_city")}
+            placeholder="Город партнёра"
+            value={form.partner_city}
+            onChange={(e) =>
+              setForm({ ...form, partner_city: e.target.value })
+            }
+          />
+          <input
+            className={errorClass("client")}
+            placeholder="Клиент / организация"
+            value={form.client}
+            onChange={(e) =>
+              setForm({ ...form, client: e.target.value })
+            }
+          />
+
+          <div className="mode-toggle">
+            <div
+              className={`tag ${!perSkuMode ? "active" : ""}`}
+              onClick={() => setPerSkuMode(false)}
+            >
+              Единый
+            </div>
+            <div
+              className={`tag ${perSkuMode ? "active" : ""}`}
+              onClick={() => setPerSkuMode(true)}
+            >
+              Индивидуально
+            </div>
+          </div>
+
+          <SkuSelector
+            skus={skus}
+            selected={selectedSkus}
+            setSelected={setSelectedSkus}
+            perSkuMode={perSkuMode}
+            onAreaChange={onAreaChange}
+          />
+
+          {!perSkuMode && (
+            <input
+              className="input"
+              placeholder="Единый метраж (м²)"
+              value={form.area_m2}
+              onChange={(e) =>
+                setForm({ ...form, area_m2: e.target.value })
+              }
+            />
+          )}
+
+          <input
+            className={errorClass("last4")}
+            placeholder="Последние 4 цифры телефона"
+            value={form.last4}
+            onChange={(e) =>
+              setForm({ ...form, last4: e.target.value })
+            }
+          />
+          <input
+            className={errorClass("object_city")}
+            placeholder="Город объекта"
+            value={form.object_city}
+            onChange={(e) =>
+              setForm({ ...form, object_city: e.target.value })
+            }
+          />
+          <input
+            className="input"
+            placeholder="Адрес объекта"
+            value={form.address}
+            onChange={(e) =>
+              setForm({ ...form, address: e.target.value })
+            }
+          />
+          <input
+            className="input"
+            placeholder="Комментарий"
+            value={form.comment}
+            onChange={(e) =>
+              setForm({ ...form, comment: e.target.value })
+            }
+          />
+
+          <button className="btn" onClick={submit}>
+            Добавить защиту
+          </button>
+        </div>
+      </div>
+
+      <div className="toolbar">
+        <input
+          className="input search"
+          placeholder="Поиск…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
         <select
           className="select"
-          value={archiveFilter}
-          onChange={(e) => setArchiveFilter(e.target.value)}
+          value={managerFilter}
+          onChange={(e) => setManagerFilter(e.target.value)}
         >
-          <option value="all">Все (кроме активных)</option>
-          <option value="success">Успешные</option>
-          <option value="closed">Закрытые</option>
-          <option value="deleted">Удалённые</option>
-        </select>
-      </div>
-    )}
-  </div>
-</div>
-
-<div className="grid">
-  {stats.map((s) => (
-    <StatCard key={s.manager} s={s} />
-  ))}
-</div>
-
-<div className="card">
-  <div className="row">
-    {/* 1️⃣ Выбор менеджера для новой защиты */}
-    <select
-      className="select"
-      value={form.manager}
-      onChange={(e) => setForm({ ...form, manager: e.target.value })}
-    >
-      <option value="">Выберите менеджера…</option>
-      {Array.isArray(managers) &&
-        managers.map((m) => (
-          <option key={m.id} value={m.first_name || m.name || m.username}>
-            {m.first_name || m.name || m.username}
-          </option>
-        ))}
-    </select>
-
-    {/* 2️⃣ Фильтр по менеджерам */}
-    <select
-      className="select"
-      value={managerFilter}
-      onChange={(e) => setManagerFilter(e.target.value)}
-    >
-      <option value="">Все менеджеры</option>
-      {Array.isArray(managers) &&
-        managers.map((m) => (
-          <option key={m.id}>{m.first_name || m.name || m.username}</option>
-        ))}
-    </select>
-
-    <input
-      className={errorClass("partner")}
-      placeholder="Партнёр (дилер)"
-      value={form.partner}
-      onChange={(e) => setForm({ ...form, partner: e.target.value })}
-    />
-    <input
-      className={errorClass("partner_city")}
-      placeholder="Город партнёра"
-      value={form.partner_city}
-      onChange={(e) => setForm({ ...form, partner_city: e.target.value })}
-    />
-    <input
-      className={errorClass("client")}
-      placeholder="Клиент / организация"
-      value={form.client}
-      onChange={(e) => setForm({ ...form, client: e.target.value })}
-    />
-
-    <div className="mode-toggle">
-      <div
-        className={`tag ${!perSkuMode ? "active" : ""}`}
-        onClick={() => setPerSkuMode(false)}
-      >
-        Единый
-      </div>
-      <div
-        className={`tag ${perSkuMode ? "active" : ""}`}
-        onClick={() => setPerSkuMode(true)}
-      >
-        Индивидуально
-      </div>
-    </div>
-
-    <SkuSelector
-      skus={skus}
-      selected={selectedSkus}
-      setSelected={setSelectedSkus}
-      perSkuMode={perSkuMode}
-      onAreaChange={onAreaChange}
-    />
-
-    {!perSkuMode && (
-      <input
-        className="input"
-        placeholder="Единый метраж (м²)"
-        value={form.area_m2}
-        onChange={(e) => setForm({ ...form, area_m2: e.target.value })}
-      />
-    )}
-
-    <input
-      className={errorClass("last4")}
-      placeholder="Последние 4 цифры телефона"
-      value={form.last4}
-      onChange={(e) => setForm({ ...form, last4: e.target.value })}
-    />
-    <input
-      className={errorClass("object_city")}
-      placeholder="Город объекта"
-      value={form.object_city}
-      onChange={(e) => setForm({ ...form, object_city: e.target.value })}
-    />
-    <input
-      className="input"
-      placeholder="Адрес объекта"
-      value={form.address}
-      onChange={(e) => setForm({ ...form, address: e.target.value })}
-    />
-    <input
-      className="input"
-      placeholder="Комментарий"
-      value={form.comment}
-      onChange={(e) => setForm({ ...form, comment: e.target.value })}
-    />
-
-    <button className="btn" onClick={submit}>
-      Добавить защиту
-    </button>
-  </div>
-</div>
-
-<div className="toolbar sticky">
-  <input
-    className="input search"
-    placeholder="Поиск…"
-    value={search}
-    onChange={(e) => setSearch(e.target.value)}
-  />
-  <select
-    className="select"
-    value={managerFilter}
-    onChange={(e) => setManagerFilter(e.target.value)}
-  >
-    <option value="">Все менеджеры</option>
-    {Array.isArray(managers) &&
-      managers.map((m) => (
-        <option key={m.id}>{m.first_name}</option>
-      ))}
+          <option value="">Все менеджеры</option>
+          {Array.isArray(managers) &&
+            managers.map((m) => (
+              <option key={m.id}>{m.first_name}</option>
+            ))}
         </select>
         <button className="btn secondary" onClick={exportXlsx}>
           ⬇️ Экспорт
@@ -864,7 +992,11 @@ const submitEdit = async () => {
         {items.map((it) => {
           const isArchive = it.status !== "active";
           return (
-            <div key={it.id} className="item" style={{ background: getBgColor(it) }}>
+            <div
+              key={it.id}
+              className="item"
+              style={{ background: getBgColor(it) }}
+            >
               <div className="line" onClick={() => toggleExpand(it.id)}>
                 <div>
                   <b>{it.client || "—"}</b> — {it.sku || "—"}{" "}
@@ -874,8 +1006,11 @@ const submitEdit = async () => {
                     {it.status === "success" && "Успешна"}
                     {it.status === "closed" && "Закрыта"}
                     {it.status === "deleted" && "Удалена"}
-                    {" | "}Осталось: {it.days_left} дн | Менеджер: {it.manager}
-                    {typeof it.extend_count === "number" ? ` | Продлений: ${it.extend_count}` : ""}
+                    {" | "}Осталось: {it.days_left} дн | Менеджер:{" "}
+                    {it.manager}
+                    {typeof it.extend_count === "number"
+                      ? ` | Продлений: ${it.extend_count}`
+                      : ""}
                   </div>
                   {it.warn2d && it.status === "active" && (
                     <div
@@ -889,46 +1024,73 @@ const submitEdit = async () => {
                         borderRadius: 8,
                       }}
                     >
-                      ⏰ {it.warn_text || "Через 2 дня истекает — напомни менеджеру"}
+                      ⏰{" "}
+                      {it.warn_text ||
+                        "Через 2 дня истекает — напомни менеджеру"}
                     </div>
                   )}
                 </div>
-                <div className="small arrow">{expanded[it.id] ? "▲" : "▼"}</div>
+                <div className="small arrow">
+                  {expanded[it.id] ? "▲" : "▼"}
+                </div>
               </div>
 
               {expanded[it.id] && (
                 <div className="details">
                   {it.partner && (
-                    <div className="small">🏢 {it.partner} — {it.partner_city}</div>
+                    <div className="small">
+                      🏢 {it.partner} — {it.partner_city}
+                    </div>
                   )}
-                  {it.object_city && <div className="small">📍 {it.object_city}</div>}
-                  {it.address && <div className="small">🚚 {it.address}</div>}
-                  {it.comment && <div className="small">💬 {it.comment}</div>}
+                  {it.object_city && (
+                    <div className="small">📍 {it.object_city}</div>
+                  )}
+                  {it.address && (
+                    <div className="small">🚚 {it.address}</div>
+                  )}
+                  {it.comment && (
+                    <div className="small">💬 {it.comment}</div>
+                  )}
                 </div>
               )}
 
               {!isArchive && (
                 <div className="actions">
-                <button className="btn secondary" onClick={() => act(it.id, "extend")}>
-                  Продлить
-                </button>
-                <button className="btn success" onClick={() => act(it.id, "success")}>
-                  ✅ Успешна
-                </button>
-                <button className="btn" onClick={() => act(it.id, "close")}>
-                  🚫 Закрыть
-                </button>
-                <button className="btn danger" onClick={() => act(it.id, "delete")}>
-                  🗑️ Удалить
-                </button>
-                <button
-                  className="btn secondary"
-                  onClick={() => openEditModal(it)}
-                  style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}
-                >
-                  ✏️ Редактировать
-                </button>
-              </div>
+                  <button
+                    className="btn secondary"
+                    onClick={() => act(it.id, "extend")}
+                  >
+                    Продлить
+                  </button>
+                  <button
+                    className="btn success"
+                    onClick={() => act(it.id, "success")}
+                  >
+                    ✅ Успешна
+                  </button>
+                  <button
+                    className="btn"
+                    onClick={() => act(it.id, "close")}
+                  >
+                    🚫 Закрыть
+                  </button>
+                  <button
+                    className="btn danger"
+                    onClick={() => act(it.id, "delete")}
+                  >
+                    🗑️ Удалить
+                  </button>
+                  <button
+                    className="btn secondary"
+                    onClick={() => openEditModal(it)}
+                    style={{
+                      background: "var(--bg-card)",
+                      border: "1px solid var(--border)",
+                    }}
+                  >
+                    ✏️ Редактировать
+                  </button>
+                </div>
               )}
             </div>
           );
@@ -938,7 +1100,9 @@ const submitEdit = async () => {
       {closeModal.open && (
         <Modal
           title="Закрыть защиту"
-          onClose={() => setCloseModal({ open: false, id: null, reason: "" })}
+          onClose={() =>
+            setCloseModal({ open: false, id: null, reason: "" })
+          }
           onOk={doClose}
           okText="Закрыть"
           disabled={!closeModal.reason.trim()}
@@ -947,7 +1111,12 @@ const submitEdit = async () => {
             className="input"
             placeholder="Причина закрытия (обязательно)"
             value={closeModal.reason}
-            onChange={(e) => setCloseModal((v) => ({ ...v, reason: e.target.value }))}
+            onChange={(e) =>
+              setCloseModal((v) => ({
+                ...v,
+                reason: e.target.value,
+              }))
+            }
           />
         </Modal>
       )}
@@ -955,7 +1124,9 @@ const submitEdit = async () => {
       {successModal.open && (
         <Modal
           title="Отметить как успешную"
-          onClose={() => setSuccessModal({ open: false, id: null, doc: "" })}
+          onClose={() =>
+            setSuccessModal({ open: false, id: null, doc: "" })
+          }
           onOk={doSuccess}
           okText="Сохранить"
           disabled={!successModal.doc.trim()}
@@ -964,7 +1135,12 @@ const submitEdit = async () => {
             className="input"
             placeholder="Номер документа из 1С (обязательно)"
             value={successModal.doc}
-            onChange={(e) => setSuccessModal((v) => ({ ...v, doc: e.target.value }))}
+            onChange={(e) =>
+              setSuccessModal((v) => ({
+                ...v,
+                doc: e.target.value,
+              }))
+            }
           />
         </Modal>
       )}
@@ -972,7 +1148,9 @@ const submitEdit = async () => {
       {deleteModal.open && (
         <Modal
           title="Удалить защиту"
-          onClose={() => setDeleteModal({ open: false, id: null, reason: "" })}
+          onClose={() =>
+            setDeleteModal({ open: false, id: null, reason: "" })
+          }
           onOk={doDelete}
           okText="Удалить"
           disabled={!deleteModal.reason.trim()}
@@ -981,79 +1159,95 @@ const submitEdit = async () => {
             className="input"
             placeholder="Причина удаления (обязательно)"
             value={deleteModal.reason}
-            onChange={(e) => setDeleteModal((v) => ({ ...v, reason: e.target.value }))}
+            onChange={(e) =>
+              setDeleteModal((v) => ({
+                ...v,
+                reason: e.target.value,
+              }))
+            }
           />
-          <div className="small" style={{ marginTop: 6, opacity: 0.8 }}>
+          <div
+            className="small"
+            style={{ marginTop: 6, opacity: 0.8 }}
+          >
             Будет выполнено мягкое удаление (в архив истории).
           </div>
         </Modal>
       )}
+
       {editModal?.open && (
-  <Modal
-    title="Редактировать защиту"
-    onClose={() => setEditModal({ open: false, id: null })}
-    onOk={submitEdit}
-    okText="💾 Сохранить"
-  >
-    <div className="mode-toggle" style={{ marginBottom: 10 }}>
-      <div
-        className={`tag ${!editPerSkuMode ? "active" : ""}`}
-        onClick={() => setEditPerSkuMode(false)}
-      >
-        Единый
-      </div>
-      <div
-        className={`tag ${editPerSkuMode ? "active" : ""}`}
-        onClick={() => setEditPerSkuMode(true)}
-      >
-        Индивидуально
-      </div>
-    </div>
+        <Modal
+          title="Редактировать защиту"
+          onClose={() => setEditModal({ open: false, id: null })}
+          onOk={submitEdit}
+          okText="💾 Сохранить"
+        >
+          <div className="mode-toggle" style={{ marginBottom: 10 }}>
+            <div
+              className={`tag ${
+                !editPerSkuMode ? "active" : ""
+              }`}
+              onClick={() => setEditPerSkuMode(false)}
+            >
+              Единый
+            </div>
+            <div
+              className={`tag ${
+                editPerSkuMode ? "active" : ""
+              }`}
+              onClick={() => setEditPerSkuMode(true)}
+            >
+              Индивидуально
+            </div>
+          </div>
 
-    <SkuSelector
-      skus={skus}
-      selected={editSelectedSkus}
-      setSelected={setEditSelectedSkus}
-      perSkuMode={editPerSkuMode}
-      onAreaChange={(sku, val) =>
-        setEditSelectedSkus((prev) =>
-          prev.map((s) =>
-            s.sku === sku.sku && s.type === sku.type ? { ...s, area: val } : s
-          )
-        )
-      }
-    />
+          <SkuSelector
+            skus={skus}
+            selected={editSelectedSkus}
+            setSelected={setEditSelectedSkus}
+            perSkuMode={editPerSkuMode}
+            onAreaChange={(sku, val) =>
+              setEditSelectedSkus((prev) =>
+                prev.map((s) =>
+                  s.sku === sku.sku && s.type === sku.type
+                    ? { ...s, area: val }
+                    : s
+                )
+              )
+            }
+          />
 
-    {!editPerSkuMode && (
-      <input
-        className="input"
-        placeholder="Единый метраж (м²)"
-        value={editAreaUnified}
-        onChange={(e) => setEditAreaUnified(e.target.value)}
-        style={{ marginTop: 10 }}
-      />
-    )}
+          {!editPerSkuMode && (
+            <input
+              className="input"
+              placeholder="Единый метраж (м²)"
+              value={editAreaUnified}
+              onChange={(e) =>
+                setEditAreaUnified(e.target.value)
+              }
+              style={{ marginTop: 10 }}
+            />
+          )}
 
-    <input
-      className="input"
-      placeholder="Комментарий"
-      value={editComment}
-      onChange={(e) => setEditComment(e.target.value)}
-      style={{ marginTop: 10 }}
-    />
+          <input
+            className="input"
+            placeholder="Комментарий"
+            value={editComment}
+            onChange={(e) => setEditComment(e.target.value)}
+            style={{ marginTop: 10 }}
+          />
 
-    <div className="small" style={{ marginTop: 6, opacity: 0.8 }}>
-      💡 Можно добавлять или удалять артикулы, менять метраж (индивидуально или общий).  
-      Минимум 50 м² суммарно.
-    </div>
-  </Modal>
-)}
-
-
+          <div
+            className="small"
+            style={{ marginTop: 6, opacity: 0.8 }}
+          >
+            💡 Можно добавлять или удалять артикулы, менять метраж
+            (индивидуально или общий). Минимум 50 м² суммарно.
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
 
 export default App;
-
-
