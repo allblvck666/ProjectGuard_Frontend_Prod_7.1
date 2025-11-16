@@ -197,48 +197,42 @@ function App() {
 
   
   // ========================
-// 🔐 Telegram Auto-Login
-// ========================
-useEffect(() => {
-  try {
-    const tg = window.Telegram?.WebApp;
-
-    // НЕ мини-апп → пропускаем
-    if (!tg?.initDataUnsafe?.user) return;
-
-    const user = tg.initDataUnsafe.user;
-
-    // Отправляем user.id на backend → он вернёт роль и токен
-    fetch(`${import.meta.env.VITE_API_URL}/api/auth/telegram-login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json",
-        "Authorization": `Bearer ${localStorage.getItem("jwt_token")}` },
-      body: JSON.stringify({
-        tg_id: user.id,
-        username: user.username || "",
-        first_name: user.first_name || "",
-      }),
-    })
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.ok) {
+  useEffect(() => {
+    try {
+      const tg = window.Telegram?.WebApp;
+      if (!tg?.initDataUnsafe?.user) return;
+  
+      const user = tg.initDataUnsafe.user;
+  
+      fetch(`${import.meta.env.VITE_API_URL}/api/auth/telegram-login`, {
+        method: "POST",
+        headers: { 
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tg_id: user.id,
+          username: user.username || "",
+          first_name: user.first_name || "",
+        }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (!data.ok) return;
+  
           localStorage.setItem("jwt_token", data.token);
           localStorage.setItem("role", data.role);
-          // 💉 сразу пробрасываем токен в axios
+  
+          // 💉 пробрасываем токен в axios
           axios.defaults.headers.common["token"] = data.token;
-          if (data.role === "admin" || data.role === "superadmin") {
-            setRoute("admin");
-            localStorage.setItem("route", "admin");
-          } else {
-            setRoute("main");
-            localStorage.setItem("route", "main");
-          }
-        }
-      });
-  } catch (err) {
-    console.log("Telegram auto-login skipped", err);
-  }
-}, []);
+  
+          // Telegram WebApp — ВСЕГДА делаем reload после логина
+          window.location.reload();
+        });
+    } catch (err) {
+      console.log("Telegram auto-login skipped", err);
+    }
+  }, []);
+  
 
 
 // ===== ВРЕМЕННЫЙ DEV-LOGIN =====
