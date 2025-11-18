@@ -14,9 +14,7 @@ export const api = axios.create({
 // 🔥 backend принимает токен ТОЛЬКО в headers.token !!!
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("jwt_token");
-  if (token) {
-    config.headers.token = token;  // ← ЭТО НАДО
-    delete config.headers.Authorization; // ← МЫ ОБЯЗАТЕЛЬНО УБИРАЕМ ЭТО
-  }
+  if (token) config.headers.token = token; // <-- ВАЖНО
   return config;
 });
+
