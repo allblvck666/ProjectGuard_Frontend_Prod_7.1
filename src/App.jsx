@@ -196,13 +196,17 @@ function App() {
   // =====================================
   // 🔥 ЖЁСТКИЙ ФИКС БЕСКОНЕЧНОГО РЕЛОАДА
   // =====================================
-  if (
-    localStorage.getItem("route") === "admin" &&
-    !["admin", "superadmin"].includes(localStorage.getItem("role"))
-  ) {
-    console.log("🛑 Fix: удаляю route=admin для не-админа");
-    localStorage.setItem("route", "main");
-  }
+  useEffect(() => {
+    const role = localStorage.getItem("role");
+    const route = localStorage.getItem("route");
+  
+    if (route === "admin" && !["admin", "superadmin"].includes(role)) {
+      console.log("🛑 Fix: удаляю route=admin для не-админа");
+      localStorage.setItem("route", "main");
+      setRoute("main");
+    }
+  }, []);
+  
 
   // 🔗 Синхронизация axios с токеном при старте
   useEffect(() => {
@@ -347,9 +351,13 @@ const [route, setRoute] = useState(initialRoute);
 const role = localStorage.getItem("role");
 
 // если нет токена → только LoginPage
-if (!localStorage.getItem("jwt_token") && route !== "login") {
-  setRoute("login");
-}
+useEffect(() => {
+  if (!localStorage.getItem("jwt_token")) {
+    console.log("🔐 Нет токена → route=login");
+    setRoute("login");
+    localStorage.setItem("route", "login");
+  }
+}, []);
 
 // обычный менеджер НЕ может видеть админку
 useEffect(() => {
