@@ -5,6 +5,8 @@ import axios from "axios";
 // ================================
 export const API_BASE = "https://projectguard-prod-7-1.onrender.com";
 
+console.log("🔥 api.js loaded, API_BASE =", API_BASE);
+
 // ================================
 // ✨ axios instance
 // ================================
