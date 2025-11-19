@@ -765,7 +765,7 @@ if (isTG && !ready) {
             letterSpacing: "0.5px",
           }}
         >
-          🔰 Aquafloor защиты
+          🔰 Aquafloor Guard — TEST 999
         </h1>
 
         <button className="btn" onClick={goAdmin}>
