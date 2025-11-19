@@ -1,4 +1,5 @@
-import axios from "axios";
+import { api, API_BASE } from "./api";
+const API = API_BASE;
 
 export const API_BASE = "https://projectguard-prod-7-1.onrender.com";
 
