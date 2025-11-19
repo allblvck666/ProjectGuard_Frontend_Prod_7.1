@@ -4,7 +4,7 @@ import axios from "axios";
 // 🔥 ЕДИНЫЙ ИСТОЧНИК API, без env
 export const API_BASE = "https://projectguard-prod-7-1.onrender.com";
 
-console.log("API_BASE =", API_BASE);
+console.log("🔥 FRONTEND: API_BASE =", API_BASE);
 
 // 🔥 axios создаём с единым URL
 export const api = axios.create({
