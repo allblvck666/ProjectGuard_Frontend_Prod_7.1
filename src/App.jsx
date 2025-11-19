@@ -8,6 +8,14 @@ import "./App.css";
 console.log("🔥 App.jsx reloaded at", new Date().toISOString());
 import LoginPage from "./LoginPage";
 
+window.addEventListener("error", (e) => {
+  console.log("🔥 GLOBAL ERROR:", e.message);
+});
+
+window.addEventListener("unhandledrejection", (e) => {
+  console.log("🔥 PROMISE ERROR:", e.reason);
+});
+
 // ✅ Правильный универсальный путь
 import { API_BASE } from "./api";
 const API = API_BASE;
