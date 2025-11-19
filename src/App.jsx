@@ -716,21 +716,14 @@ function App() {
   // ==============================
 
 // 🛡️ Telegram WebApp: безопасный старт
-const [ready, setReady] = useState(!isTG);
+  const [ready, setReady] = useState(!isTG);
 
-useEffect(() => {
-  if (!isTG) return;
-
-  const tg = window.Telegram.WebApp;
-
-  // Telegram должен полностью инициализироваться
-  try {
-    tg.ready();
-  } catch (_) {}
-
-  // Делаем задержку 150–250ms, чтобы WebApp стабилизировался
-  setTimeout(() => setReady(true), 180);
-}, [isTG]);
+  useEffect(() => {
+      if (!isTG) return;
+      const tg = window.Telegram.WebApp;
+      tg.ready();
+      setReady(true);
+    }, [isTG]);
 
 // Пока WebApp инициализируется — ничего НЕ рендерим
 if (isTG && !ready) {
