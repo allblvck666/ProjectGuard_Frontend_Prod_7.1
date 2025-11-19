@@ -1,6 +1,6 @@
 // frontend/src/App.jsx
 import { api } from "./api";
-
+import { api, API_BASE } from "./api";
 import AdminPage from "./AdminPage.jsx";
 console.log("📦 App.jsx загружает AdminPage из", import.meta.url);
 import { useEffect, useState } from "react";
