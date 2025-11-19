@@ -1,21 +1,17 @@
 // frontend/src/App.jsx
-
-// ✅ Правильный единый импорт
-import { api, API_BASE } from "./api";
-
-import { useEffect, useState } from "react";
+import { api } from "./api";
+import { API_BASE } from "./api";
 
 import AdminPage from "./AdminPage.jsx";
 import LoginPage from "./LoginPage";
 
+import { useEffect, useState } from "react";
 import "./App.css";
 
-// 🔥 Диагностика
-console.log("📦 App.jsx загружает AdminPage из", import.meta.url);
-console.log("🔥 App.jsx reloaded at", new Date().toISOString());
+console.log("🔥 App.jsx loaded", new Date().toISOString());
 
-// Удобный универсальный путь API
 const API = API_BASE;
+
 
 /* === Карточка статистики === */
 function StatCard({ s }) {
