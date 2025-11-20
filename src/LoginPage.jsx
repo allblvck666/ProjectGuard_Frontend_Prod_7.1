@@ -1,99 +1,79 @@
 // frontend/src/LoginPage.jsx
 import { useState } from "react";
-import { api } from "./api";
-import TelegramLoginButton from "./TelegramLoginButton";
+import { API_BASE } from "./api";
+import "./App.css";
 
 export default function LoginPage({ onLogin }) {
-  const [tgId, setTgId] = useState("");
-  const [username, setUsername] = useState("");
-  const [firstName, setFirstName] = useState("");
+  const [tgId, setTgId] = useState("426188469");
+  const [username, setUsername] = useState("messiah");
+  const [firstName, setFirstName] = useState("Дмитрий");
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
 
-  const submit = async (e) => {
-    e.preventDefault();
-    setErr("");
-
-    if (!tgId) {
-      setErr("Введите Telegram ID (числом)");
-      return;
-    }
-
-    const payload = {
-      id: Number(tgId),
-      username: username || "",
-      first_name: firstName || "",
-    };
-
+  const doDevLogin = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const res = await api.post("/api/auth/telegram", payload);
+      const res = await fetch(`${API_BASE}/api/auth/dev-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tg_id: Number(tgId),
+          username,
+          first_name: firstName,
+          role: "superadmin", // ты
+        }),
+      });
 
-      const { token, role } = res.data;
+      const data = await res.json();
+      console.log("DEV LOGIN RESPONSE =", data);
 
-      localStorage.setItem("jwt_token", token);
-      localStorage.setItem("role", role);
-
-      // 👉 вместо перезагрузки — вызываем onLogin()
-      if (onLogin) {
-        onLogin(role);
-      } else {
-        // 👉 безопасное переключение маршрута
-        localStorage.setItem(
-          "route",
-          role === "admin" || role === "superadmin" ? "admin" : "main"
-        );
+      if (!data.ok || !data.token) {
+        alert("❌ Ошибка входа (dev-login)");
+        return;
       }
+
+      // кладём токен и роль туда, откуда читает App.jsx и interceptors
+      localStorage.setItem("jwt_token", data.token);
+      localStorage.setItem("role", data.role || "superadmin");
+
+      // сообщаем App, что логин успешен
+      onLogin(data.role || "superadmin");
     } catch (e) {
       console.error(e);
-      setErr(e.response?.data?.detail || "Ошибка авторизации");
+      alert("Ошибка запроса к серверу");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div
-      className="container"
-      style={{
-        maxWidth: 420,
-        marginTop: 80,
-        textAlign: "center",
-      }}
-    >
-      <h2>Вход через Telegram</h2>
-      <p className="small" style={{ opacity: 0.7 }}>
-        Авторизуйтесь, чтобы попасть в ProjectGuard
-      </p>
+    <div className="login-page">
+      <div className="login-card">
+        <h1>Вход через Telegram</h1>
+        <p className="login-subtitle">
+          Авторизуйтесь, чтобы попасть в ProjectGuard
+        </p>
 
-      <div style={{ display: "flex", justifyContent: "center", marginTop: 24 }}>
-        <TelegramLoginButton />
-      </div>
+        {/* Большая кнопка под Telegram WebApp (на будущее) */}
+        <button
+          className="btn login-btn"
+          type="button"
+          onClick={() => alert("Пока используем ручной вход ниже 👇")}
+        >
+          🚪 Войти через Telegram
+        </button>
 
-      <div style={{ marginTop: 40, opacity: 0.6, fontSize: 13 }}>
-        или ручной вход (для тестов)
-      </div>
+        <p className="login-divider">или ручной вход (для тестов)</p>
 
-      <form
-        onSubmit={submit}
-        className="card"
-        style={{
-          gap: 8,
-          display: "flex",
-          flexDirection: "column",
-          marginTop: 12,
-        }}
-      >
-        <label>
+        <label className="login-label">
           Telegram ID
           <input
             className="input"
             value={tgId}
             onChange={(e) => setTgId(e.target.value)}
-            placeholder="426188469"
           />
         </label>
-        <label>
+
+        <label className="login-label">
           Username
           <input
             className="input"
@@ -102,22 +82,25 @@ export default function LoginPage({ onLogin }) {
             placeholder="@username"
           />
         </label>
-        <label>
+
+        <label className="login-label">
           Имя
           <input
             className="input"
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
-            placeholder="Дмитрий"
           />
         </label>
 
-        {err && <div style={{ color: "tomato" }}>{err}</div>}
-
-        <button className="btn" type="submit" disabled={loading}>
-          {loading ? "Входим..." : "Войти вручную"}
+        <button
+          className="btn login-btn"
+          type="button"
+          onClick={doDevLogin}
+          disabled={loading}
+        >
+          {loading ? "Входим…" : "Войти вручную (superadmin)"}
         </button>
-      </form>
+      </div>
     </div>
   );
 }
