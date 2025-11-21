@@ -11,7 +11,7 @@ console.log("🔥 api.js loaded, API_BASE =", API_BASE);
 // Общий инстанс axios
 export const api = axios.create({
   baseURL: API_BASE,
-  timeout: 60000,
+  timeout: 80000,
 });
 
 // 👉 к каждому запросу приклеиваем заголовок token
