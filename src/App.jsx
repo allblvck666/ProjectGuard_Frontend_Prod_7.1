@@ -332,7 +332,6 @@ function App() {
   const [managers, setManagers] = useState([]);
   const [expanded, setExpanded] = useState({});
   const [managerFilter, setManagerFilter] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
 
   const [form, setForm] = useState({
@@ -432,6 +431,7 @@ function App() {
       setEditModal({ open: false, id: null });
       await load();
     } catch (err) {
+      console.error("Ошибка при редактировании защиты:", err);
       alert("Ошибка при редактировании защиты");
     }
   };
@@ -439,13 +439,13 @@ function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState([]);
 
+  const getStatusParam = () => {
+    if (viewTab === "active") return "active";
+    return archiveFilter === "all" ? "" : archiveFilter;
+  };
+
   const load = async () => {
-    let statusParam = statusFilter;
-    if (viewTab === "active") {
-      statusParam = "active";
-    } else {
-      statusParam = archiveFilter === "all" ? "" : archiveFilter;
-    }
+    const statusParam = getStatusParam();
 
     const [s, list] = await Promise.all([
       api.get(`${API}/api/stats`),
@@ -498,7 +498,7 @@ function App() {
 
     if (showHistory) loadHistory();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [managerFilter, statusFilter, search, showHistory, viewTab, archiveFilter]);
+  }, [managerFilter, search, showHistory, viewTab, archiveFilter]);
 
   const onAreaChange = (skuObj, value) =>
     setSelectedSkus((prev) =>
@@ -701,11 +701,12 @@ function App() {
   };
 
   const exportXlsx = () => {
+    const statusParam = getStatusParam();
     const url = `${API}/api/export?search=${encodeURIComponent(
       search
     )}&manager=${encodeURIComponent(
       managerFilter
-    )}&status=${encodeURIComponent(statusFilter)}`;
+    )}&status=${encodeURIComponent(statusParam)}`;
     window.open(url, "_blank");
   };
 
