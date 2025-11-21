@@ -420,6 +420,7 @@ function NotificationsTab() {
       }));
       setManagers(data);
     } catch (e) {
+      console.error("Ошибка загрузки менеджеров:", e);
       alert("Ошибка загрузки менеджеров");
     } finally {
       setLoading(false);
