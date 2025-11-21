@@ -4,15 +4,15 @@ import axios from "axios";
 export const API_BASE =
   import.meta.env.VITE_API_BASE || "https://projectguard-prod-7-1.onrender.com";
 
-export const api = axios.create({
-  baseURL: API_BASE,
-  timeout: 60000, // даём до 60 сек на холодный старт Render
-});
-
-// === работа с токеном ===
-
+// ключ, под которым храним токен
 const TOKEN_KEY = "pg_token";
 
+export const api = axios.create({
+  baseURL: API_BASE,
+  timeout: 60000, // до 60 секунд на холодный старт Render
+});
+
+// === Работа с токеном ===
 export function setAuthToken(token) {
   if (token) {
     api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
@@ -25,13 +25,16 @@ export function setAuthToken(token) {
   }
 }
 
-// при загрузке приложения пытаемся подцепить токен из localStorage
-const savedToken = localStorage.getItem(TOKEN_KEY);
+// при загрузке приложения — пытаемся подцепить токен
+// берём либо pg_token, либо старый jwt_token (если вдруг он остался)
+const savedToken =
+  localStorage.getItem(TOKEN_KEY) || localStorage.getItem("jwt_token");
+
 if (savedToken) {
   setAuthToken(savedToken);
 }
 
-// чтобы не было вечных перезагрузок на 401
+// === Перехват ответов ===
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -42,7 +45,7 @@ api.interceptors.response.use(
 
     if (error.response?.status === 401) {
       console.warn("401 от API:", error.config?.url);
-      // НИЧЕГО не перезагружаем и не чистим — просто отдаём ошибку дальше
+      // НЕ делаем reload и не чистим токен — просто отдаём ошибку в компонент
     }
 
     return Promise.reject(error);
