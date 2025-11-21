@@ -1,46 +1,48 @@
 // frontend/src/api.js
 import axios from "axios";
 
-// Базовый URL бэка
 export const API_BASE =
-  import.meta.env.VITE_API_BASE ||
-  "https://projectguard-prod-7-1.onrender.com";
+  import.meta.env.VITE_API_BASE || "https://projectguard-prod-7-1.onrender.com";
 
-console.log("🔥 api.js loaded, API_BASE =", API_BASE);
-
-// Общий инстанс axios
 export const api = axios.create({
   baseURL: API_BASE,
-  timeout: 80000,
+  timeout: 60000, // даём до 60 сек на холодный старт Render
 });
 
-// 👉 к каждому запросу приклеиваем заголовок token
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("jwt_token");
+// === работа с токеном ===
+
+const TOKEN_KEY = "pg_token";
+
+export function setAuthToken(token) {
   if (token) {
-    config.headers["token"] = token; // <-- совпадает с get_current_user(token: Header)
+    api.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    localStorage.setItem(TOKEN_KEY, token);
+    console.log("axios token set");
+  } else {
+    delete api.defaults.headers.common["Authorization"];
+    localStorage.removeItem(TOKEN_KEY);
+    console.log("axios token cleared");
   }
-  return config;
-});
+}
 
-// 👉 обработка ошибок (401 + таймауты)
+// при загрузке приложения пытаемся подцепить токен из localStorage
+const savedToken = localStorage.getItem(TOKEN_KEY);
+if (savedToken) {
+  setAuthToken(savedToken);
+}
+
+// чтобы не было вечных перезагрузок на 401
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.code === "ECONNABORTED") {
-      console.warn("⏱ Axios timeout:", error.config?.url);
+      console.warn("Timeout / холодный старт Render:", error.config?.url);
+      return Promise.reject(error);
     }
 
     if (error.response?.status === 401) {
-      console.warn("🚫 401 от API — очищаю токен и перезагружаю страницу");
-      localStorage.removeItem("jwt_token");
-      localStorage.removeItem("role");
-
-      // чтобы App заново показал LoginPage
-      if (!window.__PG_AUTH_RELOADING) {
-        window.__PG_AUTH_RELOADING = true;
-        setTimeout(() => window.location.reload(), 200);
-      }
+      console.warn("401 от API:", error.config?.url);
+      // НИЧЕГО не перезагружаем и не чистим — просто отдаём ошибку дальше
     }
 
     return Promise.reject(error);
