@@ -53,7 +53,7 @@ export default function TelegramLoginButton() {
         fontSize: 16,
       }}
     >
-      🔐 Войти через Telegram
+      🔐 Влететь через Telegram
     </button>
   );
 }
